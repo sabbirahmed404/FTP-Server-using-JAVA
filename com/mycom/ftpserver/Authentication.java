@@ -52,8 +52,9 @@ public class Authentication {
     public boolean authenticate(String username, String password) {
         String storedPassword = credentials.get(username);
         System.out.println("Authenticating user: " + username);
-        System.out.println("Stored password: " + storedPassword);
-        System.out.println("Provided password: " + password);
+        // Removed password logging for security
+        // System.out.println("Stored password: " + storedPassword);
+        // System.out.println("Provided password: " + password);
         return storedPassword != null && storedPassword.equals(password);
     }
 }

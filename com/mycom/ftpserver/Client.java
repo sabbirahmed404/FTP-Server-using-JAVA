@@ -2,7 +2,6 @@ package com.mycom.ftpserver;
 
 import java.io.*;
 import java.net.*;
-import java.nio.file.*;
 import java.util.Scanner;
 
 public class Client {
@@ -10,11 +9,16 @@ public class Client {
     private static final int SERVER_PORT = 12345;
 
     public static void main(String[] args) {
-        printWelcomeBanner();
         try (Socket socket = new Socket(SERVER_ADDRESS, SERVER_PORT);
              BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
              PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
              Scanner scanner = new Scanner(System.in)) {
+
+            // Add welcome message on connection
+            System.out.println("======================================================");
+            System.out.println(" Welcome to FTP Server Using Java Socket Programming");
+            System.out.println("======================================================");
+            System.out.println();
 
             System.out.print("Username: ");
             String username = scanner.nextLine();
@@ -26,10 +30,16 @@ public class Client {
 
             String response = in.readLine();
             if ("SUCCESS".equals(response)) {
-                System.out.println("Authenticated successfully.");
+                // Read and display welcome banner
+                String line;
+                while (!(line = in.readLine()).equals("END_BANNER")) {
+                    System.out.println(line);
+                }
+                
+                // Continue with command loop
                 String serverResponse;
                 while (true) {
-                    System.out.print("> ");
+                    System.out.print("\n> ");
                     String command = scanner.nextLine().toLowerCase(); // Make command case-insensitive
                     out.println(command);
                     if (command.startsWith("download")) {
@@ -40,6 +50,10 @@ public class Client {
                         showFiles(in);
                     } else if (command.startsWith("search")) {
                         searchFile(in);
+                    } else if (command.equals("exit")) {
+                        out.println("exit");
+                        System.out.println("Exiting and closing connection.");
+                        break;
                     } else {
                         while (!(serverResponse = in.readLine()).equals("END")) {
                             System.out.println(serverResponse);
@@ -54,15 +68,6 @@ public class Client {
         }
     }
 
-    private static void printWelcomeBanner() {
-        System.out.println("=========================================");
-        System.out.println(" Welcome to the FTP Using Java Socket Programming ");
-        System.out.println(" Developed by: ");
-        System.out.println(" Sabbir Ahmed, Raihan Kabir, Ramjan Ali ");
-        System.out.println(" Green University of Bangladesh ");
-        System.out.println("=========================================");
-    }
-
     private static void receiveFile(String fileName, Socket socket) {
         try {
             BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
@@ -75,11 +80,15 @@ public class Client {
             }
 
             // Read file size
-            long fileSize = Long.parseLong(reader.readLine());
+            String sizeLine = reader.readLine();
+            long fileSize;
+            try {
+                fileSize = Long.parseLong(sizeLine);
+            } catch (NumberFormatException e) {
+                System.out.println("Invalid file size received.");
+                return;
+            }
             System.out.println("Receiving file: " + fileName + " (" + fileSize + " bytes)");
-
-            // Small delay to ensure we've received all control messages
-            Thread.sleep(100);
 
             // Read file data
             try (FileOutputStream fos = new FileOutputStream(fileName);
@@ -110,15 +119,15 @@ public class Client {
                     System.out.println(response);
                 }
             }
-        } catch (IOException | InterruptedException e) {
+        } catch (IOException e) {
             System.out.println("Error downloading file: " + e.getMessage());
         }
     }
 
     private static void uploadFile(String fileName, Socket socket,
                                    BufferedReader in, PrintWriter out) {
-        String clientDir = System.getProperty("user.dir") + File.separator + 
-                          "com" + File.separator + "mycom" + File.separator + "ftpserver";
+        // Remove package directories from the path
+        String clientDir = System.getProperty("user.dir");
         File localFile = new File(clientDir, fileName);
         
         System.out.println("Looking for file in package directory: " + localFile.getAbsolutePath());

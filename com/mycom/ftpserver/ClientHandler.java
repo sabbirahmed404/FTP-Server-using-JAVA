@@ -33,7 +33,7 @@ public class ClientHandler implements Runnable {
 
             if (auth.authenticate(username, password)) {
                 out.println("SUCCESS");
-                sendHelp();
+                sendWelcomeBanner();
                 handleClientCommands();
             } else {
                 out.println("FAILURE");
@@ -57,26 +57,34 @@ public class ClientHandler implements Runnable {
             String[] parts = command.split("\\s+", 2);
             String mainCmd = parts[0];
 
-            if (mainCmd.equalsIgnoreCase("ls")) {
-                listFiles();
-            } else if (mainCmd.equalsIgnoreCase("cd")) {
-                changeDirectory(command);
-            } else if (mainCmd.equalsIgnoreCase("pwd")) {
-                printWorkingDirectory();
-            } else if (mainCmd.equalsIgnoreCase("upload")) {
-                uploadFile(command);
-            } else if (mainCmd.equalsIgnoreCase("download")) {
-                downloadFile(command);
-            } else if (mainCmd.equalsIgnoreCase("showfiles")) {
-                showFiles(command);
-            } else if (mainCmd.equalsIgnoreCase("search")) {
-                searchFile(command);
-            } else if (mainCmd.equalsIgnoreCase("help")) {
-                sendHelp();
+            // Handle download and upload commands separately
+            if (mainCmd.equalsIgnoreCase("download") || mainCmd.equalsIgnoreCase("upload")) {
+                if (mainCmd.equalsIgnoreCase("download")) {
+                    downloadFile(command);
+                } else {
+                    uploadFile(command);
+                }
             } else {
-                out.println("Invalid command");
+                // Wrap other commands with command result markers
+                out.println("\n=== Command Result Start ===");
+                if (mainCmd.equalsIgnoreCase("ls")) {
+                    listFiles();
+                } else if (mainCmd.equalsIgnoreCase("cd")) {
+                    changeDirectory(command);
+                } else if (mainCmd.equalsIgnoreCase("pwd")) {
+                    printWorkingDirectory();
+                } else if (mainCmd.equalsIgnoreCase("showfiles")) {
+                    showFiles(command);
+                } else if (mainCmd.equalsIgnoreCase("search")) {
+                    searchFile(command);
+                } else if (mainCmd.equalsIgnoreCase("help")) {
+                    sendHelp();
+                } else {
+                    out.println("Invalid command");
+                }
+                out.println("=== Command Result End ===\n");
+                out.println("END");
             }
-            out.println("END");
         }
     }
 
@@ -124,50 +132,49 @@ public class ClientHandler implements Runnable {
             Path filePath = currentDir.resolve(parts[1]).normalize();
             if (filePath.startsWith(storageDir) && Files.exists(filePath) && !Files.isDirectory(filePath)) {
                 try {
-                    // First send control message
+                    // Send control messages using PrintWriter
                     out.println("BEGIN_FILE_TRANSFER");
-                    out.flush();
+                    out.println(Files.size(filePath));
+                    out.flush(); // Ensure messages are sent immediately
 
-                    // Send file size
-                    long fileSize = Files.size(filePath);
-                    out.println(fileSize);
-                    out.flush();
-
-                    // Small delay to ensure control messages are sent
-                    Thread.sleep(100);
-
-                    // Send file data on raw stream
+                    // Send file data using raw OutputStream
+                    OutputStream os = clientSocket.getOutputStream();
                     try (FileInputStream fis = new FileInputStream(filePath.toFile());
                          BufferedInputStream bis = new BufferedInputStream(fis)) {
                         
-                        OutputStream os = clientSocket.getOutputStream();
                         byte[] buffer = new byte[8192];
                         int bytesRead;
+                        long totalSent = 0;
+                        long fileSize = Files.size(filePath);
                         
                         while ((bytesRead = bis.read(buffer)) != -1) {
                             os.write(buffer, 0, bytesRead);
-                            os.flush();
+                            totalSent += bytesRead;
+                            // Optional: Log progress on server side
+                            System.out.printf("Sent: %.2f%%\r", (totalSent * 100.0) / fileSize);
                         }
+                        os.flush();
                     }
 
-                    // Small delay before sending end markers
-                    Thread.sleep(100);
-                    
                     // Send end markers
                     out.println("END_FILE_TRANSFER");
                     out.println("END");
                     out.flush();
-                } catch (IOException | InterruptedException e) {
+                    
+                } catch (IOException e) {
                     out.println("Error: " + e.getMessage());
                     out.println("END");
+                    out.flush();
                 }
             } else {
                 out.println("File not found or is a directory");
                 out.println("END");
+                out.flush();
             }
         } else {
             out.println("Usage: download <file>");
             out.println("END");
+            out.flush();
         }
     }
 
@@ -279,5 +286,19 @@ public class ClientHandler implements Runnable {
         out.println("showfiles - Show contents of list.txt");
         out.println("search <file> - Search for a file");
         out.println("help - Show this help message");
+        out.println("Exit - To Terminate the Show");
+
+    }
+
+    private void sendWelcomeBanner() {
+        out.println("=========================================");
+        out.println(" Welcome to the FTP Using Java Socket Programming ");
+        out.println(" Developed by: ");
+        out.println(" Sabbir Ahmed");
+        out.println(" github.com/sabbirahmed404 ");
+        out.println("=========================================");
+        out.println(); // Empty line for spacing
+        out.println(" Type Help to see the Commands and Their Description");
+        out.println("END_BANNER"); // Add marker instead of empty line
     }
 }
